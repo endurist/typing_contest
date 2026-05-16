@@ -1,5 +1,6 @@
 from typing_chase.networking import JsonLineConnection, connect_socket, host_socket
 import typing_chase.networking as networking
+from typing_chase import config
 import socket
 
 
@@ -37,6 +38,7 @@ class FakeSocket:
         self.listen_backlog = None
         self.connected_to = None
         self.timeout = None
+        self.closed = False
 
     def setsockopt(self, *args):
         self.options.append(args)
@@ -52,6 +54,9 @@ class FakeSocket:
 
     def settimeout(self, timeout):
         self.timeout = timeout
+
+    def close(self):
+        self.closed = True
 
 
 def test_host_socket_binds_and_listens(monkeypatch):
@@ -88,4 +93,21 @@ def test_connect_socket_uses_timeout_while_connecting(monkeypatch):
 
     connect_socket("127.0.0.1", 5050)
 
-    assert timeouts == [2.0, None]
+    assert timeouts == [config.SOCKET_TIMEOUT_SECONDS, None]
+
+
+def test_connect_socket_closes_on_connect_failure(monkeypatch):
+    sockets = []
+
+    class FailingSocket(FakeSocket):
+        def connect(self, address):
+            raise OSError("unreachable")
+
+    monkeypatch.setattr(networking.socket, "socket", lambda *args: sockets.append(FailingSocket(*args)) or sockets[-1])
+
+    try:
+        connect_socket("127.0.0.1", 5050)
+    except OSError:
+        pass
+
+    assert sockets[0].closed is True

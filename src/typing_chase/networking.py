@@ -7,6 +7,8 @@ from queue import Queue
 from threading import Event, Thread
 from typing import Any
 
+from typing_chase import config
+
 
 class ConnectionClosed(RuntimeError):
     pass
@@ -67,7 +69,10 @@ class NetworkPeer:
             self.connection.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
             pass
-        self.connection.sock.close()
+        try:
+            self.connection.sock.close()
+        except OSError:
+            pass
 
 
 def host_socket(host: str, port: int) -> socket.socket:
@@ -80,7 +85,12 @@ def host_socket(host: str, port: int) -> socket.socket:
 
 def connect_socket(host: str, port: int) -> socket.socket:
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client.settimeout(2.0)
-    client.connect((host, port))
-    client.settimeout(None)
-    return client
+    client.settimeout(config.SOCKET_TIMEOUT_SECONDS)
+    try:
+        client.connect((host, port))
+    except OSError:
+        client.close()
+        raise
+    else:
+        client.settimeout(None)
+        return client

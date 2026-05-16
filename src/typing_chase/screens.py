@@ -131,6 +131,7 @@ class HostLobby:
                 if self.peer.send({"type": "ready"}):
                     self.status = "Ready. Waiting for host..."
                 else:
+                    self.peer.close()
                     self.next_screen = MenuScreen("Disconnected from host.")
 
     def update(self) -> None:
@@ -139,10 +140,12 @@ class HostLobby:
 
         if self._peer_disconnected():
             if self.is_host:
+                self.peer.close()
                 self.peer = None
                 self.remote_ready = False
                 self.status = "Client disconnected. Waiting for client..."
             else:
+                self.peer.close()
                 self.next_screen = MenuScreen("Disconnected from host.")
             return
 
@@ -185,6 +188,7 @@ class HostLobby:
             return
 
         if not self.peer.send({"type": "start"}):
+            self.peer.close()
             self.peer = None
             self.remote_ready = False
             self.status = "Client disconnected. Waiting for client..."
@@ -256,10 +260,12 @@ class NetworkGameScreen:
             self.state.apply_key(Role.POLICE, event.unicode, time.monotonic())
         elif self.local_role == Role.THIEF:
             if not self.peer.send({"type": "key", "key": event.unicode}):
+                self.peer.close()
                 self.next_screen = MenuScreen("Disconnected from match.")
 
     def update(self) -> None:
         if self.peer.stopped.is_set():
+            self.peer.close()
             self.next_screen = MenuScreen("Disconnected from match.")
             return
 
@@ -289,6 +295,7 @@ class NetworkGameScreen:
         self.latest_snapshot = self.state.to_snapshot(now)
         if now - self._last_state_send >= 1.0 / config.STATE_SEND_HZ:
             if not self.peer.send({"type": "state", "game": self.latest_snapshot}):
+                self.peer.close()
                 self.next_screen = MenuScreen("Disconnected from match.")
                 return
             self._last_state_send = now

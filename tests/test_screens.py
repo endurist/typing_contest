@@ -109,6 +109,7 @@ def test_client_ready_send_failure_returns_to_menu():
 
     assert isinstance(lobby.next_screen, MenuScreen)
     assert "Disconnected" in lobby.next_screen.status
+    assert peer.closed is True
 
 
 def test_host_lobby_disconnect_waits_for_replacement():
@@ -120,6 +121,7 @@ def test_host_lobby_disconnect_waits_for_replacement():
 
     assert lobby.peer is None
     assert "Waiting for client" in lobby.status
+    assert peer.closed is True
 
 
 def test_client_game_sends_keys_without_local_mutation_and_accepts_state():
@@ -159,6 +161,7 @@ def test_client_game_send_failure_returns_to_menu():
 
     assert isinstance(game.next_screen, MenuScreen)
     assert "Disconnected" in game.next_screen.status
+    assert peer.closed is True
 
 
 def test_host_game_state_send_failure_returns_to_menu():
@@ -172,3 +175,16 @@ def test_host_game_state_send_failure_returns_to_menu():
 
     assert isinstance(game.next_screen, MenuScreen)
     assert "Disconnected" in game.next_screen.status
+    assert peer.closed is True
+
+
+def test_client_game_stopped_peer_returns_to_menu_and_closes():
+    peer = FakePeer()
+    peer.incoming = FakeQueue([])
+    peer.stopped = type("Stopped", (), {"is_set": lambda _self: True})()
+    game = NetworkGameScreen.client(peer)
+
+    game.update()
+
+    assert isinstance(game.next_screen, MenuScreen)
+    assert peer.closed is True
