@@ -60,7 +60,13 @@ class GameState:
         if self.phase != Phase.PLAYING or len(key) != 1:
             return
 
-        player = self.police if role == Role.POLICE else self.thief
+        if role == Role.POLICE:
+            player = self.police
+        elif role == Role.THIEF:
+            player = self.thief
+        else:
+            return
+
         result = player.typing.handle_key(key, now)
         player.position += result.move_delta
 
@@ -87,7 +93,7 @@ class GameState:
     def timer_remaining(self, now: float) -> float:
         if self.started_at is None:
             return config.ROUND_SECONDS
-        return max(0.0, config.ROUND_SECONDS - (now - self.started_at))
+        return min(config.ROUND_SECONDS, max(0.0, config.ROUND_SECONDS - (now - self.started_at)))
 
     def to_snapshot(self, now: float | None = None) -> dict:
         current_time = 0.0 if now is None else now
