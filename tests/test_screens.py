@@ -67,6 +67,14 @@ def test_menu_shows_status_when_host_creation_fails(monkeypatch):
     assert "port busy" in menu.status
 
 
+def test_host_lobby_has_lan_address(monkeypatch):
+    monkeypatch.setattr("typing_chase.screens.local_lan_ip", lambda: "192.168.1.5")
+
+    lobby = HostLobby(is_host=True)
+
+    assert lobby.host_address == "192.168.1.5"
+
+
 def test_join_screen_edits_ip_text():
     join = JoinScreen()
 

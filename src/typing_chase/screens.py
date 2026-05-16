@@ -103,6 +103,7 @@ class HostLobby:
         self.should_quit = False
         self.local_ready = False
         self.remote_ready = False
+        self.host_address = local_lan_ip() if is_host else ""
         self.status = "Waiting for client..." if is_host else "Connected. Press Space when ready."
 
         if self.server is not None:
@@ -160,6 +161,8 @@ class HostLobby:
         renderer.clear()
         renderer.centered("LAN Lobby", 120)
         renderer.text(self.status, (270, 230))
+        if self.is_host:
+            renderer.text(f"Host: {self.host_address}:{config.NETWORK_PORT}", (270, 270))
         renderer.text("Space - Ready / Start", (270, 300))
         renderer.text("Escape - Menu", (270, 340))
 
@@ -312,3 +315,14 @@ class NetworkGameScreen:
                 messages.append(self.peer.incoming.get_nowait())
             except Empty:
                 return messages
+
+
+def local_lan_ip() -> str:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("8.8.8.8", 80))
+        return str(probe.getsockname()[0])
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        probe.close()
