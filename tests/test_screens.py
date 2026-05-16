@@ -69,6 +69,16 @@ def test_host_game_applies_remote_thief_key_and_sends_state():
     assert peer.sent[-1]["game"]["thief"]["position"] == game.state.thief.position
 
 
+def test_host_starts_after_client_connects_when_space_pressed():
+    peer = FakePeer()
+    lobby = HostLobby(is_host=True, peer=peer)
+
+    lobby.handle_event(key_event(pygame.K_SPACE, " "))
+
+    assert isinstance(lobby.next_screen, NetworkGameScreen)
+    assert peer.sent == [{"type": "start"}]
+
+
 def test_client_game_sends_keys_without_local_mutation_and_accepts_state():
     peer = FakePeer()
     peer.incoming = FakeQueue(

@@ -166,9 +166,6 @@ class HostLobby:
         if not self.local_ready:
             self.status = "Client ready. Press Space to start."
             return
-        if not self.remote_ready:
-            self.status = "Ready. Waiting for client..."
-            return
 
         self.peer.send({"type": "start"})
         self._close_server()
