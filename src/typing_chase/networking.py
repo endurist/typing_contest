@@ -58,3 +58,17 @@ class NetworkPeer:
     def close(self) -> None:
         self.stopped.set()
         self.connection.sock.close()
+
+
+def host_socket(host: str, port: int) -> socket.socket:
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((host, port))
+    server.listen(1)
+    return server
+
+
+def connect_socket(host: str, port: int) -> socket.socket:
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((host, port))
+    return client

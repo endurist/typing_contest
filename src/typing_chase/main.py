@@ -4,7 +4,7 @@ import pygame
 
 from typing_chase import config
 from typing_chase.renderer import Renderer
-from typing_chase.screens import LocalPreviewGame
+from typing_chase.screens import MenuScreen
 
 
 def main() -> None:
@@ -13,7 +13,7 @@ def main() -> None:
     pygame.display.set_caption("Typing Chase")
     clock = pygame.time.Clock()
     renderer = Renderer(screen)
-    game = LocalPreviewGame()
+    screen_state = MenuScreen()
 
     running = True
     while running:
@@ -21,11 +21,16 @@ def main() -> None:
             if event.type == pygame.QUIT:
                 running = False
             else:
-                game.handle_event(event)
+                screen_state.handle_event(event)
 
-        game.update()
-        renderer.draw_game(game.snapshot(), local_role=game.local_role.value)
+        if getattr(screen_state, "should_quit", False):
+            running = False
+            continue
+
+        screen_state.update()
+        screen_state.draw(renderer)
         pygame.display.flip()
+        screen_state = screen_state.next_screen or screen_state
         clock.tick(config.FPS)
 
     pygame.quit()
