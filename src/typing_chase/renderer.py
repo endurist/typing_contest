@@ -9,7 +9,6 @@ DARK = (34, 34, 34)
 ROAD = (217, 222, 231)
 TEXT = (31, 47, 67)
 WHITE = (250, 252, 255)
-RED = (190, 57, 57)
 
 
 class Renderer:
@@ -61,5 +60,13 @@ class Renderer:
         pygame.draw.rect(self.screen, (151, 175, 208), rect, 2)
         prompt = player["prompt"]
         cursor = player["cursor"]
-        self.text(f"{label}: {prompt[:cursor]}", (76, y + 12), BLUE)
-        self.text(prompt[cursor:], (76 + min(cursor * 12, 520), y + 12), TEXT)
+        label_text = f"{label}: "
+        typed_text = prompt[:cursor]
+        remaining_text = prompt[cursor:]
+        text_y = y + 12
+
+        self.text(label_text, (76, text_y), TEXT)
+        typed_x = 76 + self.font.size(label_text)[0]
+        self.text(typed_text, (typed_x, text_y), BLUE)
+        remaining_x = typed_x + self.font.size(typed_text)[0]
+        self.text(remaining_text, (remaining_x, text_y), TEXT)
