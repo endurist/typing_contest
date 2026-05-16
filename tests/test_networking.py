@@ -36,6 +36,7 @@ class FakeSocket:
         self.bound_to = None
         self.listen_backlog = None
         self.connected_to = None
+        self.timeout = None
 
     def setsockopt(self, *args):
         self.options.append(args)
@@ -48,6 +49,9 @@ class FakeSocket:
 
     def connect(self, address):
         self.connected_to = address
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
 
 
 def test_host_socket_binds_and_listens(monkeypatch):
@@ -68,3 +72,20 @@ def test_connect_socket_connects_to_address(monkeypatch):
     client = connect_socket("127.0.0.1", 5050)
 
     assert client.connected_to == ("127.0.0.1", 5050)
+    assert client.timeout is None
+
+
+def test_connect_socket_uses_timeout_while_connecting(monkeypatch):
+    sockets = []
+    timeouts = []
+
+    class TrackingSocket(FakeSocket):
+        def settimeout(self, timeout):
+            super().settimeout(timeout)
+            timeouts.append(timeout)
+
+    monkeypatch.setattr(networking.socket, "socket", lambda *args: sockets.append(TrackingSocket(*args)) or sockets[-1])
+
+    connect_socket("127.0.0.1", 5050)
+
+    assert timeouts == [2.0, None]

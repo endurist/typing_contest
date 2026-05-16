@@ -52,11 +52,21 @@ class NetworkPeer:
                 self.stopped.set()
                 return
 
-    def send(self, message: dict[str, Any]) -> None:
-        self.connection.send(message)
+    def send(self, message: dict[str, Any]) -> bool:
+        try:
+            self.connection.send(message)
+        except OSError as exc:
+            self.error = str(exc)
+            self.stopped.set()
+            return False
+        return True
 
     def close(self) -> None:
         self.stopped.set()
+        try:
+            self.connection.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         self.connection.sock.close()
 
 
@@ -70,5 +80,7 @@ def host_socket(host: str, port: int) -> socket.socket:
 
 def connect_socket(host: str, port: int) -> socket.socket:
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.settimeout(2.0)
     client.connect((host, port))
+    client.settimeout(None)
     return client

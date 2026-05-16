@@ -13,16 +13,20 @@ from typing_chase.networking import JsonLineConnection, NetworkPeer, connect_soc
 
 
 class MenuScreen:
-    def __init__(self) -> None:
+    def __init__(self, status: str = "") -> None:
         self.next_screen = None
         self.should_quit = False
+        self.status = status
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type != pygame.KEYDOWN:
             return
 
         if event.key == pygame.K_h:
-            self.next_screen = HostLobby.host()
+            try:
+                self.next_screen = HostLobby.host()
+            except OSError as exc:
+                self.status = f"Host failed: {exc}"
         elif event.key == pygame.K_j:
             self.next_screen = JoinScreen()
         elif event.key == pygame.K_ESCAPE:
@@ -37,6 +41,8 @@ class MenuScreen:
         renderer.text("H - Host game", (360, 230))
         renderer.text("J - Join game", (360, 270))
         renderer.text("Escape - Quit", (360, 310))
+        if self.status:
+            renderer.text(self.status, (260, 370))
 
 
 class JoinScreen:
@@ -122,17 +128,28 @@ class HostLobby:
             if self.is_host:
                 self._try_start_host_game()
             elif self.peer is not None:
-                self.peer.send({"type": "ready"})
-                self.status = "Ready. Waiting for host..."
+                if self.peer.send({"type": "ready"}):
+                    self.status = "Ready. Waiting for host..."
+                else:
+                    self.next_screen = MenuScreen("Disconnected from host.")
 
     def update(self) -> None:
         if self.is_host and self.peer is None:
             self._accept_client()
 
+        if self._peer_disconnected():
+            if self.is_host:
+                self.peer = None
+                self.remote_ready = False
+                self.status = "Client disconnected. Waiting for client..."
+            else:
+                self.next_screen = MenuScreen("Disconnected from host.")
+            return
+
         for message in self._drain_messages():
             if self.is_host and message.get("type") == "ready":
                 self.remote_ready = True
-                self._try_start_host_game()
+                self.status = "Client ready. Press Space to start."
             elif not self.is_host and message.get("type") == "start":
                 self.next_screen = NetworkGameScreen.client(self.peer)
 
@@ -167,9 +184,16 @@ class HostLobby:
             self.status = "Client ready. Press Space to start."
             return
 
-        self.peer.send({"type": "start"})
+        if not self.peer.send({"type": "start"}):
+            self.peer = None
+            self.remote_ready = False
+            self.status = "Client disconnected. Waiting for client..."
+            return
         self._close_server()
         self.next_screen = NetworkGameScreen.host(self.peer)
+
+    def _peer_disconnected(self) -> bool:
+        return self.peer is not None and self.peer.stopped.is_set()
 
     def _drain_messages(self) -> list[dict[str, Any]]:
         if self.peer is None:
@@ -231,9 +255,14 @@ class NetworkGameScreen:
         if self.local_role == Role.POLICE and self.state is not None:
             self.state.apply_key(Role.POLICE, event.unicode, time.monotonic())
         elif self.local_role == Role.THIEF:
-            self.peer.send({"type": "key", "key": event.unicode})
+            if not self.peer.send({"type": "key", "key": event.unicode}):
+                self.next_screen = MenuScreen("Disconnected from match.")
 
     def update(self) -> None:
+        if self.peer.stopped.is_set():
+            self.next_screen = MenuScreen("Disconnected from match.")
+            return
+
         if self.local_role == Role.POLICE:
             self._update_host()
         else:
@@ -259,7 +288,9 @@ class NetworkGameScreen:
         self.state.update(now)
         self.latest_snapshot = self.state.to_snapshot(now)
         if now - self._last_state_send >= 1.0 / config.STATE_SEND_HZ:
-            self.peer.send({"type": "state", "game": self.latest_snapshot})
+            if not self.peer.send({"type": "state", "game": self.latest_snapshot}):
+                self.next_screen = MenuScreen("Disconnected from match.")
+                return
             self._last_state_send = now
 
     def _update_client(self) -> None:

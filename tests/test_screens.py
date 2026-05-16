@@ -10,9 +10,17 @@ class FakePeer:
         self.incoming = incoming or []
         self.sent = []
         self.closed = False
+        self.stopped = type("Stopped", (), {"is_set": lambda _self: False})()
+        self.error = None
+        self.send_result = True
 
     def send(self, message):
+        if not self.send_result:
+            self.error = "send failed"
+            self.stopped = type("Stopped", (), {"is_set": lambda _self: True})()
+            return False
         self.sent.append(message)
+        return True
 
     def close(self):
         self.closed = True
@@ -44,6 +52,19 @@ def test_menu_selects_host_and_join_screens(monkeypatch):
     menu.handle_event(key_event(pygame.K_j, "j"))
 
     assert isinstance(menu.next_screen, JoinScreen)
+
+
+def test_menu_shows_status_when_host_creation_fails(monkeypatch):
+    def fail_host(cls):
+        raise OSError("port busy")
+
+    monkeypatch.setattr(HostLobby, "host", classmethod(fail_host))
+    menu = MenuScreen()
+
+    menu.handle_event(key_event(pygame.K_h, "h"))
+
+    assert menu.next_screen is None
+    assert "port busy" in menu.status
 
 
 def test_join_screen_edits_ip_text():
@@ -79,6 +100,28 @@ def test_host_starts_after_client_connects_when_space_pressed():
     assert peer.sent == [{"type": "start"}]
 
 
+def test_client_ready_send_failure_returns_to_menu():
+    peer = FakePeer()
+    peer.send_result = False
+    lobby = HostLobby.client(peer)
+
+    lobby.handle_event(key_event(pygame.K_SPACE, " "))
+
+    assert isinstance(lobby.next_screen, MenuScreen)
+    assert "Disconnected" in lobby.next_screen.status
+
+
+def test_host_lobby_disconnect_waits_for_replacement():
+    peer = FakePeer()
+    peer.stopped = type("Stopped", (), {"is_set": lambda _self: True})()
+    lobby = HostLobby(is_host=True, peer=peer)
+
+    lobby.update()
+
+    assert lobby.peer is None
+    assert "Waiting for client" in lobby.status
+
+
 def test_client_game_sends_keys_without_local_mutation_and_accepts_state():
     peer = FakePeer()
     peer.incoming = FakeQueue(
@@ -104,3 +147,28 @@ def test_client_game_sends_keys_without_local_mutation_and_accepts_state():
     assert peer.sent == [{"type": "key", "key": "a"}]
     assert game.snapshot()["thief"]["position"] == 222
     assert game.local_role == Role.THIEF
+
+
+def test_client_game_send_failure_returns_to_menu():
+    peer = FakePeer()
+    peer.incoming = FakeQueue([])
+    peer.send_result = False
+    game = NetworkGameScreen.client(peer)
+
+    game.handle_event(key_event(pygame.K_a, "a"))
+
+    assert isinstance(game.next_screen, MenuScreen)
+    assert "Disconnected" in game.next_screen.status
+
+
+def test_host_game_state_send_failure_returns_to_menu():
+    peer = FakePeer()
+    peer.incoming = FakeQueue([])
+    peer.send_result = False
+    game = NetworkGameScreen.host(peer)
+    game._last_state_send = -999.0
+
+    game.update()
+
+    assert isinstance(game.next_screen, MenuScreen)
+    assert "Disconnected" in game.next_screen.status
