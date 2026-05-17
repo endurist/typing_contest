@@ -4,18 +4,17 @@ A two-player LAN typing chase game built with Python and Pygame.
 
 ## Setup
 
-Use Python 3.11 or newer.
+Use `uv` with Python 3.11 or newer.
 
 ```bash
-python3.11 -m venv .venv
+uv sync --dev
 source .venv/bin/activate
-pip install -e ".[dev]"
 ```
 
 ## Run
 
 ```bash
-typing-chase
+uv run typing-chase
 ```
 
 One computer chooses **Host Game** and shares the displayed LAN IP.
@@ -40,5 +39,5 @@ The second computer chooses **Join Game** and enters that IP.
 ## Test
 
 ```bash
-pytest
+uv run pytest
 ```
