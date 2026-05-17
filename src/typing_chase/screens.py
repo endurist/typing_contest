@@ -178,6 +178,7 @@ class HostLobby:
             self.status = f"Host error: {exc}"
             return
 
+        sock.setblocking(True)
         self.peer = NetworkPeer(JsonLineConnection(sock))
         self.peer.start_reader()
         self.status = f"Client connected: {address[0]}"

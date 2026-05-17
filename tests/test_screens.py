@@ -36,6 +36,25 @@ class FakeQueue:
         return self.messages.pop(0)
 
 
+class FakeAcceptedSocket:
+    def __init__(self):
+        self.blocking_values = []
+
+    def setblocking(self, value):
+        self.blocking_values.append(value)
+
+
+class FakeServerSocket:
+    def __init__(self, accepted_socket):
+        self.accepted_socket = accepted_socket
+
+    def setblocking(self, value):
+        pass
+
+    def accept(self):
+        return self.accepted_socket, ("192.168.1.20", 50000)
+
+
 def key_event(key, unicode=""):
     return pygame.event.Event(pygame.KEYDOWN, key=key, unicode=unicode)
 
@@ -73,6 +92,17 @@ def test_host_lobby_has_lan_address(monkeypatch):
     lobby = HostLobby(is_host=True)
 
     assert lobby.host_address == "192.168.1.5"
+
+
+def test_host_accept_sets_client_socket_back_to_blocking(monkeypatch):
+    accepted_socket = FakeAcceptedSocket()
+    monkeypatch.setattr("typing_chase.screens.NetworkPeer.start_reader", lambda self: None)
+    lobby = HostLobby(is_host=True, server=FakeServerSocket(accepted_socket))
+
+    lobby.update()
+
+    assert accepted_socket.blocking_values == [True]
+    assert lobby.status == "Client connected: 192.168.1.20"
 
 
 def test_join_screen_edits_ip_text():
