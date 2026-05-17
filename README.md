@@ -4,8 +4,10 @@ A two-player LAN typing chase game built with Python and Pygame.
 
 ## Setup
 
+Use Python 3.11 or newer.
+
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
