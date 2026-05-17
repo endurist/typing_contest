@@ -1,7 +1,7 @@
 import pygame
 from queue import Empty
 
-from typing_chase.game_state import Role
+from typing_chase.game_state import Phase, Role
 from typing_chase.screens import HostLobby, JoinScreen, MenuScreen, NetworkGameScreen
 
 
@@ -173,6 +173,7 @@ def test_client_game_sends_keys_without_local_mutation_and_accepts_state():
                     "timer_remaining": 88,
                     "winner": None,
                     "end_reason": None,
+                    "prompt_index": 0,
                     "police": {"position": 12, "prompt": "abc", "cursor": 1},
                     "thief": {"position": 222, "prompt": "abc", "cursor": 2},
                 },
@@ -226,3 +227,76 @@ def test_client_game_stopped_peer_returns_to_menu_and_closes():
 
     assert isinstance(game.next_screen, MenuScreen)
     assert peer.closed is True
+
+
+def test_host_can_restart_ended_match_with_next_prompt():
+    peer = FakePeer()
+    peer.incoming = FakeQueue([])
+    game = NetworkGameScreen.host(peer)
+    game.state.phase = Phase.ENDED
+    first_prompt = game.state.police.typing.prompt
+
+    game.handle_event(key_event(pygame.K_r, "r"))
+
+    assert game.state.phase == Phase.PLAYING
+    assert game.state.prompt_index == 1
+    assert game.state.police.typing.prompt != first_prompt
+    assert peer.sent[-1]["type"] == "restart"
+    assert peer.sent[-1]["game"]["prompt_index"] == 1
+
+
+def test_client_requests_restart_after_ended_snapshot():
+    peer = FakePeer()
+    peer.incoming = FakeQueue([])
+    game = NetworkGameScreen.client(peer)
+    game.latest_snapshot = {
+        "phase": "ended",
+        "timer_remaining": 0,
+        "winner": "thief",
+        "end_reason": "escaped",
+        "prompt_index": 0,
+        "police": {"position": 0, "prompt": "abc", "cursor": 0},
+        "thief": {"position": 100, "prompt": "abc", "cursor": 0},
+    }
+
+    game.handle_event(key_event(pygame.K_r, "r"))
+
+    assert peer.sent == [{"type": "restart_request"}]
+
+
+def test_host_accepts_client_restart_request_after_match_ends():
+    peer = FakePeer()
+    peer.incoming = FakeQueue([{"type": "restart_request"}])
+    game = NetworkGameScreen.host(peer)
+    game.state.phase = Phase.ENDED
+
+    game.update()
+
+    assert game.state.phase == Phase.PLAYING
+    assert peer.sent[-1]["type"] == "restart"
+
+
+def test_client_accepts_restart_snapshot():
+    peer = FakePeer()
+    peer.incoming = FakeQueue(
+        [
+            {
+                "type": "restart",
+                "game": {
+                    "phase": "playing",
+                    "timer_remaining": 180,
+                    "winner": None,
+                    "end_reason": None,
+                    "prompt_index": 2,
+                    "police": {"position": 0, "prompt": "xyz", "cursor": 0},
+                    "thief": {"position": 180, "prompt": "xyz", "cursor": 0},
+                },
+            }
+        ]
+    )
+    game = NetworkGameScreen.client(peer)
+
+    game.update()
+
+    assert game.snapshot()["prompt_index"] == 2
+    assert game.snapshot()["police"]["prompt"] == "xyz"

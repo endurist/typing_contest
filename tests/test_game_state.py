@@ -1,3 +1,4 @@
+from typing_chase import config
 from typing_chase.game_state import GameState, Phase, Role
 
 
@@ -54,7 +55,7 @@ def test_police_wins_when_close_enough():
 def test_thief_wins_at_escape_line():
     state = GameState.new_match()
     state.start(now=0.0)
-    state.thief.position = 1000.0
+    state.thief.position = config.TRACK_LENGTH
 
     state.update(now=1.0)
 
@@ -67,7 +68,7 @@ def test_thief_wins_when_timer_expires():
     state = GameState.new_match()
     state.start(now=10.0)
 
-    state.update(now=100.0)
+    state.update(now=10.0 + config.ROUND_SECONDS)
 
     assert state.phase == Phase.ENDED
     assert state.winner == Role.THIEF
@@ -84,6 +85,7 @@ def test_snapshot_round_trips_basic_state():
     assert snapshot["phase"] == "playing"
     assert snapshot["police"]["position"] == 12.0
     assert snapshot["thief"]["position"] == 180.0
+    assert snapshot["prompt_index"] == 0
 
 
 def test_snapshot_without_now_does_not_exceed_round_seconds_after_start():
@@ -92,4 +94,14 @@ def test_snapshot_without_now_does_not_exceed_round_seconds_after_start():
 
     snapshot = state.to_snapshot()
 
-    assert snapshot["timer_remaining"] == 90.0
+    assert snapshot["timer_remaining"] == config.ROUND_SECONDS
+
+
+def test_new_match_uses_prompt_index_and_wraps():
+    state = GameState.new_match(1)
+    wrapped = GameState.new_match(len(config.PROMPTS))
+
+    assert state.prompt_index == 1
+    assert state.police.typing.prompt == config.PROMPTS[1]
+    assert state.thief.typing.prompt == config.PROMPTS[1]
+    assert wrapped.prompt_index == 0

@@ -49,7 +49,8 @@ class Renderer:
         self._draw_prompt_panel("Thief", snapshot["thief"], 420)
 
         if snapshot["phase"] == "ended":
-            self.centered(f"{snapshot['winner']} wins: {snapshot['end_reason']}", 300)
+            self.centered(f"{snapshot['winner']} wins: {snapshot['end_reason']}", 82)
+            self.text("R - Next round", (390, 102))
 
     def _track_to_screen(self, position: float) -> int:
         return int(60 + min(position / config.TRACK_LENGTH, 1.0) * 800)
@@ -60,9 +61,8 @@ class Renderer:
         pygame.draw.rect(self.screen, (151, 175, 208), rect, 2)
         prompt = player["prompt"]
         cursor = player["cursor"]
-        label_text = f"{label}: "
-        typed_text = prompt[:cursor]
-        remaining_text = prompt[cursor:]
+        label_text = f"{label} {cursor}/{len(prompt)}: "
+        typed_text, remaining_text = self._visible_prompt(prompt, cursor)
         text_y = y + 12
 
         self.text(label_text, (76, text_y), TEXT)
@@ -70,3 +70,17 @@ class Renderer:
         self.text(typed_text, (typed_x, text_y), BLUE)
         remaining_x = typed_x + self.font.size(typed_text)[0]
         self.text(remaining_text, (remaining_x, text_y), TEXT)
+
+    @staticmethod
+    def _visible_prompt(prompt: str, cursor: int) -> tuple[str, str]:
+        typed_start = max(0, cursor - 24)
+        typed_text = prompt[typed_start:cursor]
+        remaining_end = min(len(prompt), cursor + 48)
+        remaining_text = prompt[cursor:remaining_end]
+
+        if typed_start > 0:
+            typed_text = "..." + typed_text
+        if remaining_end < len(prompt):
+            remaining_text = remaining_text + "..."
+
+        return typed_text, remaining_text

@@ -31,13 +31,15 @@ class GameState:
     phase: Phase
     police: PlayerState
     thief: PlayerState
+    prompt_index: int = 0
     started_at: float | None = None
     winner: Role | None = None
     end_reason: str | None = None
 
     @classmethod
-    def new_match(cls) -> "GameState":
-        prompt = config.PROMPTS[0]
+    def new_match(cls, prompt_index: int = 0) -> "GameState":
+        normalized_prompt_index = prompt_index % len(config.PROMPTS)
+        prompt = config.PROMPTS[normalized_prompt_index]
         return cls(
             phase=Phase.LOBBY,
             police=PlayerState(
@@ -50,6 +52,7 @@ class GameState:
                 position=config.START_GAP,
                 typing=TypingProgress(prompt, config.MOVE_PER_CHAR, config.MISTAKE_PENALTY_SECONDS),
             ),
+            prompt_index=normalized_prompt_index,
         )
 
     def start(self, now: float) -> None:
@@ -102,6 +105,7 @@ class GameState:
             "timer_remaining": self.timer_remaining(current_time),
             "winner": None if self.winner is None else self.winner.value,
             "end_reason": self.end_reason,
+            "prompt_index": self.prompt_index,
             "police": self._player_snapshot(self.police),
             "thief": self._player_snapshot(self.thief),
         }

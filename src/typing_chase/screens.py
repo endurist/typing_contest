@@ -8,7 +8,7 @@ from typing import Any
 import pygame
 
 from typing_chase import config
-from typing_chase.game_state import GameState, Role
+from typing_chase.game_state import GameState, Phase, Role
 from typing_chase.networking import JsonLineConnection, NetworkPeer, connect_socket, host_socket
 
 
@@ -226,10 +226,17 @@ class HostLobby:
 
 
 class NetworkGameScreen:
-    def __init__(self, peer: NetworkPeer, local_role: Role, state: GameState | None = None) -> None:
+    def __init__(
+        self,
+        peer: NetworkPeer,
+        local_role: Role,
+        state: GameState | None = None,
+        prompt_index: int = 0,
+    ) -> None:
         self.peer = peer
         self.local_role = local_role
         self.state = state
+        self.prompt_index = prompt_index
         self.latest_snapshot: dict[str, Any] | None = None
         self.next_screen = None
         self.should_quit = False
@@ -241,12 +248,12 @@ class NetworkGameScreen:
             self.latest_snapshot = self.state.to_snapshot(now)
 
     @classmethod
-    def host(cls, peer: NetworkPeer) -> "NetworkGameScreen":
-        return cls(peer, Role.POLICE, GameState.new_match())
+    def host(cls, peer: NetworkPeer, prompt_index: int = 0) -> "NetworkGameScreen":
+        return cls(peer, Role.POLICE, GameState.new_match(prompt_index), prompt_index)
 
     @classmethod
-    def client(cls, peer: NetworkPeer) -> "NetworkGameScreen":
-        return cls(peer, Role.THIEF)
+    def client(cls, peer: NetworkPeer, prompt_index: int = 0) -> "NetworkGameScreen":
+        return cls(peer, Role.THIEF, prompt_index=prompt_index)
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type != pygame.KEYDOWN:
@@ -255,6 +262,14 @@ class NetworkGameScreen:
         if event.key == pygame.K_ESCAPE:
             self.peer.close()
             self.next_screen = MenuScreen()
+            return
+
+        if event.key == pygame.K_r and self._match_has_ended():
+            if self.local_role == Role.POLICE:
+                self._restart_host_match()
+            elif not self.peer.send({"type": "restart_request"}):
+                self.peer.close()
+                self.next_screen = MenuScreen("Disconnected from match.")
             return
 
         if event.unicode == "":
@@ -294,6 +309,9 @@ class NetworkGameScreen:
         for message in self._drain_messages():
             if message.get("type") == "key":
                 self.state.apply_key(Role.THIEF, str(message.get("key", "")), now)
+            elif message.get("type") == "restart_request" and self.state.phase.value == "ended":
+                self._restart_host_match()
+                return
 
         self.state.update(now)
         self.latest_snapshot = self.state.to_snapshot(now)
@@ -308,6 +326,26 @@ class NetworkGameScreen:
         for message in self._drain_messages():
             if message.get("type") == "state" and isinstance(message.get("game"), dict):
                 self.latest_snapshot = message["game"]
+                self.prompt_index = int(self.latest_snapshot.get("prompt_index", self.prompt_index))
+            elif message.get("type") == "restart" and isinstance(message.get("game"), dict):
+                self.latest_snapshot = message["game"]
+                self.prompt_index = int(self.latest_snapshot.get("prompt_index", self.prompt_index))
+
+    def _match_has_ended(self) -> bool:
+        if self.state is not None:
+            return self.state.phase == Phase.ENDED
+        return self.snapshot().get("phase") == "ended"
+
+    def _restart_host_match(self) -> None:
+        self.prompt_index = (self.prompt_index + 1) % len(config.PROMPTS)
+        self.state = GameState.new_match(self.prompt_index)
+        now = time.monotonic()
+        self.state.start(now)
+        self.latest_snapshot = self.state.to_snapshot(now)
+        self._last_state_send = 0.0
+        if not self.peer.send({"type": "restart", "game": self.latest_snapshot}):
+            self.peer.close()
+            self.next_screen = MenuScreen("Disconnected from match.")
 
     def _drain_messages(self) -> list[dict[str, Any]]:
         messages = []
